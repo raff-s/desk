@@ -1,0 +1,26 @@
+{
+  "name": "desk-hunk-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "desk review screen for Hunk",
+  "type": "module",
+  "hunk": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "apiVersion": 28
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@opentui/core": "^0.5.14",
+    "@opentui/react": "^0.5.14",
+    "@types/node": "^24.19.0",
+    "@types/react": "^19.3.0",
+    "hunkdiff": "^0.23.0",
+    "react": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}
