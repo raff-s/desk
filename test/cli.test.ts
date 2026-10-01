@@ -11,7 +11,15 @@ import { git, prFixture, write } from "./helpers/fixture.ts";
 const bin = fileURLToPath(new URL("../bin/desk.ts", import.meta.url));
 
 function desk(cwd: string, ...args: string[]) {
-  const res = spawnSync(process.execPath, [bin, ...args, "--json"], { cwd, encoding: "utf8" });
+  return deskEnv(cwd, {}, ...args);
+}
+
+function deskEnv(cwd: string, env: NodeJS.ProcessEnv, ...args: string[]) {
+  const res = spawnSync(process.execPath, [bin, ...args, "--json"], {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
   const stdout = res.stdout.trim();
   return { status: res.status, data: stdout ? JSON.parse(stdout) : null, stderr: res.stderr };
 }
@@ -71,6 +79,17 @@ test("end to end: prepare, comment, send, wait, and refusals as JSON errors", as
   const storePath = desk(worktree, "store-path");
   assert.equal(storePath.data.storePath, prepared.data.storePath);
   assert.equal(desk(worktree, "bogus").status, 1);
+
+  const local = desk(worktree, "prepare", ".");
+  assert.equal(local.data.key.startsWith("local-"), true);
+  const keyed = deskEnv(worktree, { DESK_KEY: local.data.key }, "store-path");
+  assert.equal(keyed.data.key, local.data.key);
+  assert.notEqual(keyed.data.key, "pr-7");
+
+  const before = statSync(prepared.data.storePath).mtimeMs;
+  const again = desk(worktree, "reanchor", "--pr", "7");
+  assert.deepEqual(again.data.changed, []);
+  assert.equal(statSync(prepared.data.storePath).mtimeMs, before);
 });
 
 test("open prints the Hunk invocation with the desk environment", () => {

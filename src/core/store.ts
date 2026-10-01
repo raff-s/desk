@@ -79,8 +79,9 @@ export function updateStore<T>(
     file,
     () => {
       const store = readStore(file) ?? init?.() ?? fail(`No desk review at ${file}; run desk prepare first`);
+      const before = JSON.stringify(store);
       const result = fn(store);
-      writeStoreAtomic(file, store);
+      if (JSON.stringify(store) !== before) writeStoreAtomic(file, store);
       return result;
     },
     lock,

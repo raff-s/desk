@@ -19,6 +19,13 @@ export async function locateReview(repo: string, pr?: number): Promise<Located> 
     return { storePath, store };
   }
 
+  const envKey = process.env.DESK_KEY;
+  if (envKey) {
+    const storePath = storePathFor(common, envKey);
+    const store = readStore(storePath);
+    if (store) return { storePath, store };
+  }
+
   const here = listStores(common).filter((s) => s.store.worktree === root);
   const branch = currentBranch(root);
   const preferred =
