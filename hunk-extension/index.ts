@@ -133,7 +133,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
     if (!client.active || Date.now() - lastReanchor < 1000) return;
     lastReanchor = Date.now();
     try {
-      await client.run(["reanchor"]);
+      await client.runOnReview(["reanchor"]);
     } catch (e) {
       hunk.log(`reanchor failed: ${errText(e)}`);
     }
@@ -160,7 +160,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
 
   async function act(thread: Thread, action: string, notify: Notify, body?: string): Promise<boolean> {
     try {
-      await client.run(["action", thread.id, action, ...(body ? ["--body", body] : [])]);
+      await client.runOnReview(["action", thread.id, action, ...(body ? ["--body", body] : [])]);
       return true;
     } catch (e) {
       notify(`desk ${action}: ${errText(e)}`, "error");
@@ -199,7 +199,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
       return;
     }
     try {
-      await client.run(["reply", thread.id, "--body", body, "--author", "you"]);
+      await client.runOnReview(["reply", thread.id, "--body", body, "--author", "you"]);
     } catch (e) {
       notify(`desk reply: ${errText(e)}`, "error");
       return;
@@ -225,7 +225,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
     if (body === null) return;
     update({ busy: "Publishing…" });
     try {
-      const out = await client.run<{ reviewUrl: string; published: string[] }>([
+      const out = await client.runOnReview<{ reviewUrl: string; published: string[] }>([
         "publish",
         "--yes",
         "--event",
@@ -360,7 +360,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
     const start = range?.[0] ?? note.line;
     const end = range?.[1] ?? start;
     try {
-      const t = await client.run<Thread>([
+      const t = await client.runOnReview<Thread>([
         "comment",
         "add",
         "--file",
@@ -398,7 +398,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
     const body = await dialogs.input({ title: `Comment on ${file.path}:${target.line}`, placeholder: "Your comment" });
     if (!body?.trim()) return;
     try {
-      const t = await client.run<Thread>([
+      const t = await client.runOnReview<Thread>([
         "comment", "add", "--file", file.path, "--line", String(target.line), "--side", target.side, "--body", body.trim(), "--author", "you",
       ]);
       update({ activeThreadId: t.id });

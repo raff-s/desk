@@ -46,6 +46,11 @@ export class Desk {
     return parsed as T;
   }
 
+  runOnReview<T>(args: readonly string[]): Promise<T> {
+    const pr = /^pr-(\d+)$/.exec(this.active?.key ?? "")?.[1];
+    return this.run<T>(pr ? [...args, "--pr", pr] : args);
+  }
+
   async resolve(): Promise<ActiveStore> {
     const { DESK_STORE, DESK_KEY } = process.env;
     if (DESK_STORE && DESK_KEY) {
