@@ -15,7 +15,7 @@ Types live in `src/core/types.ts`. Runtime: Node 24+ running `.ts` directly (typ
 A review is identified by a **key**:
 
 - `pr-<number>` for a pull request review.
-- `local-<branch>` for reviewing the working tree with no PR (for example `desk .` after the agent wrote code).
+- `local-<branch>` for reviewing the working tree with no PR (for example `desk .` after the agent wrote code). Characters outside `A-Za-z0-9._-` in the branch become `-` (`feat/x` → `local-feat-x`); a detached HEAD uses `detached-<sha7>`.
 
 The store file is `<git common dir>/desk/<key>.json`, where the git common dir is `git rev-parse --git-common-dir` resolved to an absolute path. Every worktree of a repo shares it, so the main checkout and a PR worktree see the same threads.
 
@@ -63,7 +63,7 @@ A thread anchors to `path`, `side`, `startLine..endLine`. `anchor.snippet` holds
 
 1. `gh pr view <n> --json number,title,url,author,baseRefName,headRefName,headRefOid,isCrossRepository`.
 2. Look for the head branch in `git worktree list --porcelain`. If any worktree (including the main checkout) has it checked out, use that path.
-3. Otherwise create `<parent of main worktree>/<repo name>-pr-<n>` with `git fetch origin pull/<n>/head:<headRef>` (or the plain branch fetch for same-repo PRs) and `git worktree add <path> <headRef>`. Set upstream to `origin/<headRef>` for same-repo PRs.
+3. Otherwise create `<parent of main worktree>/<repo name>-pr-<n>`. Same-repo PRs: fetch `origin/<headRef>`, `git worktree add --track -b <headRef> <path> origin/<headRef>` (upstream `origin/<headRef>`). Cross-repository PRs: fetch `pull/<n>/head` into `refs/desk/pr/<n>` and use the local branch `pr-<n>-<headRef>` (no upstream). The head branch name of a fork is never used locally because it can collide with a branch such as `main`; step 2 looks up that same local branch name.
 4. Fetch the PR head and base. Compute sync state against `headRefOid`:
    - `in-sync`: local HEAD == PR head.
    - `updated`: PR head is ahead, tree clean → `git merge --ff-only` done.
@@ -82,7 +82,7 @@ All commands accept `--json` (machine output on stdout, errors as `{"error": "..
 | Command | Output (`--json`) |
 | --- | --- |
 | `desk` | Opens Hunk with the extension on the current repo (PR pane visible). |
-| `desk open <pr\|.>` | prepare, then exec `hunk diff <baseOid> --watch --extension <desk>/hunk-extension` in the worktree with `DESK_KEY`, `DESK_STORE`, `DESK_BIN` set. |
+| `desk open <pr\|.>` | prepare, then exec `hunk diff <baseOid> --watch --extension <desk>/hunk-extension` in the worktree with `DESK_KEY`, `DESK_STORE`, `DESK_BIN` set. With `--json` it does not start Hunk and prints `{ review, command: { command, args, cwd, env } }` instead. |
 | `desk launch <pr\|.>` | prepare, then open a full tab running `desk open <pr>` via the launcher. `{tab: {...}, review: PreparedReview}` |
 | `desk prepare <pr\|.>` | `PreparedReview` |
 | `desk prs` | `PrListItem[]` (review requested, mine, recent others; up to 50) |
@@ -95,8 +95,19 @@ All commands accept `--json` (machine output on stdout, errors as `{"error": "..
 | `desk done <id> [--message M] [--path P ...]` | Commits the working-tree changes (all, or only `--path`s) as one commit whose message is the thread's first message summary (first line, ≤ 72 chars) or `--message`, plus trailer `Desk-Thread: <key>/<id>`. Appends sha to `thread.commits`, state → `addressed`, runs reanchor, then best-effort `hunk session reload --repo <worktree> -- diff <baseOid>`. `{ thread, commit }` |
 | `desk reanchor` | `{ changed: Thread[] }` |
 | `desk sync` | Imports unresolved GitHub review threads on the PR as threads with `publish: published`, `state: sent`, author `you`, and each GitHub comment as a message whose body starts with `@<login>: `. Skips ones already linked by `github.commentId`. `{ imported: number }` |
-| `desk publish [--event COMMENT\|APPROVE\|REQUEST_CHANGES] [--body B] [--yes]` | Posts one review via `gh api repos/{owner}/{repo}/pulls/<n>/reviews` with `commit_id` = PR head, `event`, `body`, and `comments[]` (`path`, `line` = endLine, `start_line` when range, `side` = `RIGHT` for new / `LEFT` for old, `body` = all thread messages by `you`, joined; agent messages are included only if the thread author is agent and you queued it — then its first message is the body). Refuses if local HEAD ≠ PR head and any queued thread is on `side: new` (positions would not match) unless `--force`. On success marks threads `published`, stores comment ids/urls. Without `--yes` asks for confirmation on the TTY. `{ reviewUrl, published: string[] }` |
-| `desk push [--squash\|--keep] [--yes]` | Own/local only. Finds unpushed commits (`@{upstream}..HEAD`) with a `Desk-Thread` trailer. If ≥ 2 and `--squash` (or the user picks squash at the TTY prompt), squashes only those trailing review commits into one `Address review feedback` commit that keeps every trailer (refuses to squash if non-desk commits are interleaved after the first desk commit; offers keep). Re-links `thread.commits` to the new sha. Then `git push`. Never force-pushes. `{ squashed: boolean, pushed: string }` |
+| `desk publish [--event COMMENT\|APPROVE\|REQUEST_CHANGES] [--body B] [--yes]` | Posts one review via `gh api repos/{owner}/{repo}/pulls/<n>/reviews` with `commit_id` = PR head, `event`, `body`, and `comments[]` (`path`, `line` = endLine, `start_line` when range, `side` = `RIGHT` for new / `LEFT` for old, `body` = all thread messages by `you`, joined; agent messages are included only if the thread author is agent and you queued it — then its first message is the body). Refuses if local HEAD ≠ PR head and any queued thread is on `side: new` (positions would not match) unless `--force`. On success marks threads `published`, stores comment ids/urls. Multi-line comments also send `start_side`. Without `--yes` asks for confirmation on the TTY, and refuses when there is no TTY. A review with no queued threads is only allowed for `APPROVE`/`REQUEST_CHANGES` or when `--body` is given. `{ reviewUrl, published: string[] }` |
+| `desk push [--squash\|--keep] [--yes]` | Own/local only. Finds unpushed commits (`@{upstream}..HEAD`) with a `Desk-Thread` trailer. If ≥ 2 and `--squash` (or the user picks squash at the TTY prompt), squashes only those trailing review commits into one `Address review feedback` commit that keeps every trailer (refuses to squash if non-desk commits are interleaved after the first desk commit; offers keep). Re-links `thread.commits` to the new sha. Then `git push` (`git push -u origin HEAD` when the branch has no upstream; commits are then counted from `origin/<branch>` if it exists, else `baseOid`). Never force-pushes. Without `--yes` asks on the TTY and refuses when there is no TTY; without `--squash`/`--keep` it keeps unless the TTY prompt says otherwise. `{ squashed: boolean, pushed: string }` where `pushed` is the pushed HEAD sha |
+
+## Action semantics
+
+- `send`: allowed from `draft`, `addressed`, `stale`. `make-changes`: from `draft`, `sent`, `addressed`, `stale`. A `--body` on either appends a `you` message and is carried in the event.
+- `queue` is refused in `local` mode and on dismissed or already published threads. `dismiss` also unqueues.
+- `reopen` (from `dismissed` or `stale`) returns the thread to `draft`; a stale thread is re-anchored on the current text at its old line numbers.
+- Imported (`published`, `sent`) threads and old-side threads are never re-anchored.
+
+## Environment
+
+`DESK_GH` (gh binary, default `gh`), `DESK_HUNK` (hunk binary, default `hunk`), `DESK_WAIT_POLL_MS` (wait poll interval, default 500). Tests use them to avoid the network.
 
 ## Hunk extension responsibilities
 
