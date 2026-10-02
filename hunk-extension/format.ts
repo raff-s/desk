@@ -80,24 +80,21 @@ export function firstLine(text: string, max = 100): string {
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
+const NOTE_WIDTH = 42;
+
 export function noteFor(thread: Thread, mode: ReviewMode, keyFor: KeyLookup): NoteSpec {
-  const [first, ...rest] = thread.messages;
-  const firstBody = first?.body ?? "";
-  const lines: string[] = [];
-  const firstRest = firstBody.split("\n").slice(1).join("\n").trim();
-  if (firstRest) lines.push(firstRest);
-  for (const m of rest) lines.push(`${m.author}: ${m.body.trim()}`);
+  const lines = thread.messages.flatMap((m, i) => wrap(i === 0 ? m.body.trim() : `${m.author}: ${m.body.trim()}`, NOTE_WIDTH));
   if (thread.state === "stale" && thread.anchor.snippet.length > 0) {
-    lines.push(`was: ${firstLine(thread.anchor.snippet.join(" "), 80)}`);
+    lines.push(...wrap(`was: ${thread.anchor.snippet.join(" ")}`, NOTE_WIDTH));
   }
   if (thread.endLine > thread.startLine) lines.push(`lines ${thread.startLine}–${thread.endLine}`);
   const foot = footer(thread, mode, keyFor);
-  if (foot) lines.push(foot);
+  if (foot) lines.push(...wrap(foot, NOTE_WIDTH));
   return {
     filePath: thread.path,
     side: thread.side,
     line: thread.startLine,
-    summary: `${prefix(thread)} ${firstLine(firstBody)}`.trim(),
+    summary: prefix(thread),
     rationale: lines.join("\n"),
     author: thread.author,
   };

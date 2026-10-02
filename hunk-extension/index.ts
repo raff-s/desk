@@ -419,7 +419,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
     placement: "right",
     defaultOpen: true,
     currentLine: true,
-    width: { preferred: 48, min: 30, fraction: 0.28 },
+    width: { preferred: 56, min: 36, fraction: 0.38 },
     component: ThreadsPane,
   });
 

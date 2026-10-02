@@ -39,15 +39,14 @@ test("teammate mode hides make changes, local mode hides PR comment", () => {
   assert.equal(footer(thread({ publish: "queued" }), "own", keyFor), "─ S send · i make changes · p remove PR comment · R reply · x dismiss");
 });
 
-test("note puts the first line in the summary and the rest plus footer in the rationale", () => {
-  const n = noteFor(thread({ state: "stale", endLine: 12 }), "own", keyFor);
-  assert.equal(n.summary, "[agent · stale] First line");
-  assert.deepEqual(n.rationale.split("\n"), [
-    "more detail",
-    "was: const x = 1;",
-    "lines 10–12",
-    "─ S send · i make changes · p add PR comment · R reply · x dismiss",
-  ]);
+test("note keeps the whole comment in the rationale, wrapped to the diff column", () => {
+  const n = noteFor(thread({ state: "stale", endLine: 12, messages: [{ author: "agent", body: "First line\nmore detail that runs past the diff column width", at: "2026-01-01T00:00:00Z" }] }), "own", keyFor);
+  assert.equal(n.summary, "[agent · stale]");
+  const flat = n.rationale.replaceAll("\n", " ");
+  assert.ok(flat.includes("First line"));
+  assert.ok(flat.includes("more detail that runs past the diff column width"));
+  assert.ok(n.rationale.split("\n").every((line) => line.length <= 42));
+  assert.ok(n.rationale.includes("lines 10–12"));
   assert.equal(n.line, 10);
 });
 

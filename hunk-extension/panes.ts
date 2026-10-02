@@ -118,13 +118,11 @@ export function ThreadsPane(props: ExtensionPaneProps): ReactNode {
       line("loc", clip(`${mark}${t.path}:${range}${side}`, width), theme.text, bg),
       line("tag", clip(`  ${prefix(t)}`, width), stateColor(t, theme), bg),
     ];
-    const msgs = active ? t.messages : t.messages.slice(0, 1);
-    msgs.forEach((m, i) => {
-      const wrapped = wrap(`${m.author}: ${m.body}`, textWidth);
-      const shown = active ? wrapped : wrapped.slice(0, 2);
-      shown.forEach((l, j) => children.push(line(`m${i}-${j}`, `  ${l}`, m.author === "agent" ? theme.accentMuted : theme.muted, bg)));
+    t.messages.forEach((m, i) => {
+      wrap(`${m.author}: ${m.body}`, textWidth).forEach((l, j) =>
+        children.push(line(`m${i}-${j}`, `  ${l}`, m.author === "agent" ? theme.accentMuted : theme.muted, bg)),
+      );
     });
-    if (!active && t.messages.length > 1) children.push(line("more", `  … ${t.messages.length - 1} more`, theme.muted, bg));
     if (s.unmirrored[t.id]) children.push(line("unm", clip(`  ⚠ not shown inline: ${s.unmirrored[t.id]}`, width), theme.badgeRemoved, bg));
     if (active) {
       const acts = availableActions(t, reviewMode).map((a) => `${MODE_KEYS[a]} ${actionLabel(t, a)}`);
