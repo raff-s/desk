@@ -493,7 +493,10 @@ export default function desk(hunk: HunkExtensionAPI): void {
     id: "prs",
     title: "desk PRs",
     onEnter: () => update({ prsMode: true }),
-    onExit: () => update({ prsMode: false }),
+    onExit: () => {
+      update({ prsMode: false });
+      hunk.events.emit("desk:close-prs", {});
+    },
     onKey: (key, ctx) => {
       const name = key.name ?? "";
       if (getState().busy) return "handled";
@@ -607,6 +610,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
     ctx.panes.open("prs");
     void loadPrs();
   });
+  hunk.events.on("desk:close-prs", (_p, ctx) => ctx.panes.close("prs"));
   hunk.events.on("desk:focus-threads", (_p, ctx) => ctx.panes.open("threads"));
 
   hunk.on("changeset_loaded", async () => {

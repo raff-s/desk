@@ -27,7 +27,11 @@ and the contract letters work inside the threads pane (`T`).
 | `P` publish | `P` | `P` | Comment / Approve / Request changes, then optional body |
 | `o` / `O` | `o` / `O` | `o` / `O` | `cursor -g <worktree>/<path>:<line>` / `cursor <worktree>` |
 | `t` threads | `T` | `j`/`k` move, Enter/`t`/Esc back, `g` PRs | |
-| `g` PRs | `L` | type to filter, ↑↓ move, Enter open, Tab threads, Esc back | |
+| `g` PRs | `L` | type to filter, ↑↓ move, Enter open, Tab threads, Esc closes the PR pane | |
+
+To walk agent comments, press `T` to focus the threads pane and use `j` / `k`.
+Each move selects the thread and reveals its exact file and line in the diff.
+Press Enter, `t`, or Esc to return focus to the diff; the selected code stays visible.
 
 To get the contract letters globally (taking them from Hunk's files-pane, hunk-headers, refresh, theme,
 and jump-to-top defaults), add this to `~/.config/hunk/config.toml`:
