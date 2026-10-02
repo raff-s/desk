@@ -36,7 +36,17 @@ After you change code locally: `desk prepare . --json`, then the same comment â†
 
 Run `desk wait --json` in the **foreground** with a long timeout (for example `--timeout 3600`). When it returns empty events, run it again. Keep looping until the user says the review is finished.
 
-Each successful wait returns `{ events, threads }`. Handle every event.
+Each successful wait returns `{ events, threads }`. Handle every event, including ones already queued before this session started.
+
+## Continue a review
+
+If a previous agent session died, the human can say "continue the desk review" or "run desk wait". Do that. Do not start a new review and do not add the same findings again.
+
+1. `desk threads --json` (add `--pr <n>` when they named one) to see what is already there.
+2. `desk wait --json`. Events with `consumed: false` are still yours, including `make-changes` requests the last session never took.
+3. Handle each one, then wait again.
+
+Quitting Hunk does not drop the store or the wait. Comments live in `.git/desk/` inside the repo under review.
 
 ## Event: `send`
 
@@ -73,8 +83,10 @@ If `canMakeChanges` is false (teammate mode), do **not** edit code. Reply explai
 | `desk reanchor --json` | After manual edits, refresh line anchors |
 | `desk store-path --json` | Locate the store file |
 
-## Side pane keys (human)
+## Keys the human actually presses
 
-The Hunk extension uses: `c` comment, `s` send, `m` make changes, `p` queue/unqueue PR comment, `r` reply, `x` dismiss, `P` publish, `o` open file in Cursor, `O` open worktree, `t` threads pane, `g` PR pane.
+From the diff: `T` threads (`j`/`k` move, Enter back), `L` PR list (`Esc` closes it), `c` comment, `S` send, `i` make changes, `p` queue, `R` reply, `x` dismiss, `P` publish, `o`/`O` open in Cursor, `q` quit Hunk.
 
-Publishing and pushing are human actions unless explicitly requested in chat.
+Inside the threads pane the shorter letters work: `s` send, `m` make changes, `r` reply, `g` PR list.
+
+When you tell the human how to do something, use these keys, not `s`/`m`/`t`/`g` from the diff. Publishing and pushing stay human actions unless they ask in chat.

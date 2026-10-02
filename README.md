@@ -1,63 +1,83 @@
 # desk
 
-desk is a terminal code-review desk for pull requests and local changes. You and an agent draft review threads in a shared store, explore the diff in [Hunk](https://hunk.dev) with a desk extension, and only publish to GitHub when you choose. The agent never posts upstream unless you explicitly ask it to run `desk publish`.
+A terminal review for pull requests. You and your coding agent share comments on the diff. Nothing is posted to GitHub until you publish it yourself.
+
+The diff opens in [Hunk](https://hunk.dev). Comments live in `.git/desk/` inside the repo you are reviewing, so quitting Hunk does not lose them.
 
 ## Install
 
-Requires Node 24+, [`gh`](https://cli.github.com/) authenticated, and Hunk 0.23+.
+You need Node 24 or newer, the [GitHub CLI](https://cli.github.com/) (`gh auth login`), and Hunk 0.23 or newer (`brew install hunk`).
 
 ```bash
-cd ~/desk && npm install && npm link
+git clone git@github.com:raff-s/desk.git ~/desk
+cd ~/desk
+npm install
+npm link
 ```
 
-Optional but recommended for `desk launch`: [herdr](https://herdr.dev), [tuios](https://tuios.dev), or WezTerm, plus the Cursor CLI for `o` / `O` keys in the review UI.
+`npm link` puts the `desk` command on your PATH. On a second machine, clone and run the same three commands.
 
-### Agent skill
+Optional, for opening the review in a new tab: [herdr](https://herdr.dev), [tuios](https://tuios.dev), or WezTerm. The `o` and `O` keys open the file or the worktree in Cursor when the `cursor` command is on your PATH.
 
-Symlink the skill so Cursor and Claude Code pick up the workflow (run these yourself):
+### Teach your agent
 
 ```bash
-ln -sf ~/desk/skills/desk ~/.cursor/skills/desk
-ln -sf ~/desk/skills/desk ~/.claude/skills/desk
+ln -sfn ~/desk/skills/desk ~/.cursor/skills/desk
+ln -sfn ~/desk/skills/desk ~/.claude/skills/desk
 ```
 
-## Quick start
+The skill is `skills/desk/SKILL.md`. Start a new agent chat after linking it.
+
+## Review a pull request
+
+From the repo that contains the PR:
 
 ```bash
-desk              # open Hunk on the current repo
-desk open 638     # prepare PR 638 and start the review session
+desk              # open the current branch, or its open PR
+desk open 874     # open pull request 874
 ```
 
-In chat: *“Review PR 638 with desk”* — the agent runs `desk prepare`, adds draft comments, `desk launch`, then `desk wait` in a loop.
+Or ask the agent: **Review PR 874 with desk.**
 
-## Review modes
+It reads the whole diff, writes each finding as a local draft, and opens Hunk. It does not post anything to GitHub.
 
-| Mode | Who | Code changes |
+If the agent session dies after you press Make changes, start a new one in the same repo and say: **Continue the desk review. Run desk wait.** The requests are still in the store. The agent picks them up, edits the code, and marks each thread addressed.
+
+## Keys
+
+Hunk already uses several of the letters desk would like, so these are the keys that work from the diff. Press `T` first if you want the shorter letters in the last column.
+
+| From the diff | In the threads pane | What it does |
 | --- | --- | --- |
-| **own** | Your PR | Allowed (`make-changes`, `done`, `push`) |
-| **teammate** | Someone else's PR | Comments only |
-| **local** | No PR (`desk .`) | Allowed; publish refused |
+| `T`, then `j` / `k` | `j` / `k` | Next or previous comment. The diff jumps to that line. |
+| `Enter`, `t`, or `Esc` | same | Leave the threads pane. The code you jumped to stays on screen. |
+| `L` | `g` | Pull request list. `Esc` closes it. `Enter` opens the selected PR. |
+| `c` or `C` | | Comment on the current line. Save with `Ctrl-S`. |
+| `S` | `s` | Send the comment to the agent. |
+| `i` | `m` | Make changes. The agent edits this thread. Hidden on someone else's PR. |
+| `p` | `p` | Queue this comment for GitHub, or take it back out of the queue. |
+| `R` or `A` | `r` | Reply. You can reply, send, or make changes from the same reply. |
+| `x` | `x` | Dismiss. |
+| `P` | `P` | Publish the queued comments as one GitHub review. |
+| `o` / `O` | `o` / `O` | Open this line, or the whole worktree, in Cursor. |
 
-## Thread lifecycle (local)
+Quit Hunk with `q`. Open it again with `desk open <number>`. Comments, queued publish state, and unanswered Make changes requests all come back.
 
-- **draft** → **sent** (Send, or agent reply) → **making-changes** (Make changes) → **addressed** (`desk done`).
-- **stale** when re-anchoring cannot find the snippet; **dismissed** when closed.
-- **publish** is separate: `none` → `queued` → **published** only via `desk publish`.
+## What a comment can do
 
-## Keys in the review UI
+A comment stays on your machine until you publish it.
 
-| Key | Action |
+- **Send** (`S`) asks the agent to read it and reply. The reply stays local.
+- **Make changes** (`i`) asks the agent to edit the code for that comment. On your own PR it commits in your worktree and the note becomes **addressed**. On someone else's PR this action is not offered. You leave a comment, and they decide whether to try the idea.
+- **Add PR comment** (`p`) only marks it. **Publish** (`P`) is what sends the marked comments, as one review: Comment, Approve, or Request changes.
+
+`desk push` offers to squash the small per-thread commits that have not been pushed yet. It never force-pushes, and it refuses to push a review of someone else's PR.
+
+## Where things live
+
+| Path | What |
 | --- | --- |
-| `c` | New comment on current line (yours, draft) |
-| `s` | Send thread to agent |
-| `m` | Make changes (hidden in teammate mode) |
-| `p` | Queue / unqueue GitHub PR comment |
-| `r` | Reply |
-| `x` | Dismiss |
-| `P` | Publish review (Comment / Approve / Request changes) |
-| `o` | Open file:line in Cursor |
-| `O` | Open review worktree in Cursor |
-| `t` | Focus threads pane |
-| `g` | Focus PR list pane |
-
-See `docs/CONTRACT.md` for the full CLI and store contract.
+| `.git/desk/pr-<number>.json` | Threads for that pull request, shared by every worktree of the repo |
+| `skills/desk/SKILL.md` | Instructions the agent follows |
+| `docs/CONTRACT.md` | CLI and store contract |
+| `hunk-extension/` | The Hunk screen |
