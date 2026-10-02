@@ -31,7 +31,7 @@ Writes are atomic (write a temp file in the same directory, then rename) and gua
 
 `state` (local work) and `publish` (upstream) are independent.
 
-state: `draft` → `sent` (human pressed send, or agent replied) → `making-changes` (human pressed Make changes, or replied with instructions on a thread then chose Make changes) → `addressed` (agent ran `desk done`). Any open thread → `stale` when re-anchoring finds its lines changed by something other than one of the thread's own commits. Any → `dismissed`.
+state: `draft` → `sent` (human pressed send, or agent replied). For edits: any actionable state → `queued-changes` (human pressed `i`; no event yet) → `making-changes` (human pressed `M`, dispatching every queued thread) → `addressed` (agent ran `desk done <id...>`). Any open thread → `stale` when re-anchoring finds its lines changed by something other than one of the thread's own commits. Any → `dismissed`.
 
 publish: `none` → `queued` (Add PR comment) → `published` (after `desk publish`). `queued` → `none` (unqueue).
 
@@ -42,7 +42,7 @@ Agent-authored threads always start as `draft` and `publish: none`. Only `desk p
 When the human acts in the review, core appends an event to `store.events`:
 
 - `send`: thread sent to the agent to read and reply.
-- `make-changes`: the agent should change the code for this thread. `body` holds extra instructions if the human replied ("do that, but also…").
+- `make-changes`: one item in the batch the agent should change. `desk changes send` emits one event for every queued thread at once.
 - `reply`: the human replied on a thread that is already `sent`.
 
 `desk wait` returns unconsumed events and marks them consumed.
@@ -90,9 +90,10 @@ All commands accept `--json` (machine output on stdout, errors as `{"error": "..
 | `desk store-path` | `{ key, storePath }` |
 | `desk comment add --file F --line L [--end-line E] [--side new\|old] --body B [--author you\|agent]` | `Thread` |
 | `desk reply <id> --body B [--author you\|agent]` | `Thread`. A human reply on a `sent`/`addressed` thread also emits a `reply` event. An agent reply moves `draft` → `sent`. |
-| `desk action <id> send\|make-changes\|queue\|unqueue\|dismiss\|reopen [--body B]` | `Thread`. `make-changes` refused unless `canMakeChanges`. |
+| `desk action <id> send\|queue-changes\|unqueue-changes\|make-changes\|queue\|unqueue\|dismiss\|reopen [--body B]` | `Thread`. `queue-changes` changes state without emitting an event. `make-changes` remains as a backwards-compatible immediate dispatch. Both are refused unless `canMakeChanges`. |
+| `desk changes send` | Moves every `queued-changes` thread to `making-changes` and emits all of their events together. `{ threads: Thread[] }` |
 | `desk wait [--timeout <seconds>]` | `{ events: DeskEvent[], threads: Thread[] }` for the threads those events reference. Default timeout 0 = wait forever. Polls the store every 500 ms. Exit 0 with empty events on timeout. |
-| `desk done <id> [--message M] [--path P ...]` | Commits the working-tree changes (all, or only `--path`s) as one commit whose message is the thread's first message summary (first line, ≤ 72 chars) or `--message`, plus trailer `Desk-Thread: <key>/<id>`. Appends sha to `thread.commits`, state → `addressed`, runs reanchor, then best-effort `hunk session reload --repo <worktree> -- diff <baseOid>`. `{ thread, commit }` |
+| `desk done <id...> [--message M] [--path P ...]` | Commits the completed batch once. One id preserves the old `{ thread, commit }` result. Several ids use `Address review feedback` (or `--message`), add one `Desk-Thread` trailer per id, link the same commit to every thread, mark all addressed, reanchor, then reload Hunk. `{ threads, commit }` |
 | `desk reanchor` | `{ changed: Thread[] }`. Rewrites the store only when a thread's lines or state actually changed, so a watcher does not reload in a loop. |
 | `desk sync` | Imports unresolved GitHub review threads on the PR as threads with `publish: published`, `state: sent`, author `you`, and each GitHub comment as a message whose body starts with `@<login>: `. Skips ones already linked by `github.commentId`. `{ imported: number }` |
 | `desk publish [--event COMMENT\|APPROVE\|REQUEST_CHANGES] [--body B] [--yes]` | Posts one review via `gh api repos/{owner}/{repo}/pulls/<n>/reviews` with `commit_id` = PR head, `event`, `body`, and `comments[]` (`path`, `line` = endLine, `start_line` when range, `side` = `RIGHT` for new / `LEFT` for old, `body` = all thread messages by `you`, joined; agent messages are included only if the thread author is agent and you queued it — then its first message is the body). Refuses if local HEAD ≠ PR head and any queued thread is on `side: new` (positions would not match) unless `--force`. On success marks threads `published`, stores comment ids/urls. Multi-line comments also send `start_side`. Without `--yes` asks for confirmation on the TTY, and refuses when there is no TTY. A review with no queued threads is only allowed for `APPROVE`/`REQUEST_CHANGES` or when `--body` is given. `{ reviewUrl, published: string[] }` |
@@ -116,7 +117,7 @@ All commands accept `--json` (machine output on stdout, errors as `{"error": "..
 - Mirrors every non-dismissed thread into the live Hunk session as notes (via its API or `hunk session comment add --repo <worktree>`), with a summary prefix like `[agent · draft]`, `[you · stale]`, `[addressed 3f2a1c]`, `[queued ↑]`, and a footer line listing the available keys. Re-syncs when the store changes.
 - PR pane (left): `desk prs --json`. Enter → `desk prepare <n> --json`, then repoint the window with `hunk session reload --session-path <cwd> --source <worktree> -- diff <baseOid>`, and switch `DESK_STORE`/`DESK_KEY` in-process.
 - Threads pane (right): threads with state and publish badges, messages, and the actions.
-- Keys (remappable): `c` new comment on current line (yours, draft), `s` send, `m` make changes (hidden in teammate mode), `p` add PR comment / unqueue toggle, `r` reply, `x` dismiss, `P` publish (asks Comment / Approve / Request changes and an optional body, then `desk publish --yes --event …`), `o` open current file:line in Cursor (`cursor -g <worktree>/<path>:<line>`), `O` open the worktree in Cursor (`cursor <worktree>`), `t` focus threads pane, `g` focus PR pane.
+- Keys (remappable): `c` new comment, `i`/`m` queue or unqueue this thread for changes, `M` dispatch every queued change, `S`/`s` send a question, `p` add/remove PR comment, `R`/`r` reply, `x` dismiss, `P` publish, `o`/`O` open in Cursor, `T`/`t` threads, `L`/`g` PRs.
 - After a reload (`changeset_loaded` / `session_reload`), runs `desk reanchor --json`.
 
 ## Launcher (`src/launch/index.ts`)

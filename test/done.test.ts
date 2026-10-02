@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { makeAnchor } from "../src/core/anchor.ts";
-import { commitSubject, doneThread } from "../src/core/done.ts";
+import { commitSubject, doneThread, doneThreads } from "../src/core/done.ts";
 import { prepare } from "../src/core/prepare.ts";
 import { readStore, updateStore } from "../src/core/store.ts";
 import { addThread, applyAction } from "../src/core/threads.ts";
@@ -43,6 +43,26 @@ test("done honours --message and --path", async () => {
   assert.equal(git(review.worktree, "log", "-1", "--format=%s"), "Rename constant");
   assert.equal(git(review.worktree, "show", "--name-only", "--format=", "HEAD"), "src/feature.ts");
   assert.equal(git(review.worktree, "status", "--porcelain"), "?? src/other.ts");
+});
+
+test("done batches several threads into one commit and links them all", async () => {
+  const { review } = await setup();
+  updateStore(review.storePath, (store) => {
+    addThread(store, {
+      path: "src/feature.ts", side: "new", startLine: 1, endLine: 1, body: "Second fix", author: "agent",
+      anchor: makeAnchor(store, "src/feature.ts", "new", 1, 1),
+    });
+    applyAction(store, "t1", "make-changes");
+    applyAction(store, "t2", "make-changes");
+  });
+  write(review.worktree, "src/feature.ts", "export const both = 2;\n");
+
+  const { threads, commit } = doneThreads(review.storePath, ["t1", "t2"], { paths: [] });
+  assert.equal(threads.length, 2);
+  assert.ok(threads.every((thread) => thread.state === "addressed" && thread.commits[0] === commit));
+  const body = git(review.worktree, "log", "-1", "--format=%B");
+  assert.match(body, /Desk-Thread: pr-7\/t1/);
+  assert.match(body, /Desk-Thread: pr-7\/t2/);
 });
 
 test("done refuses when there is nothing to commit", async () => {

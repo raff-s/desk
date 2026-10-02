@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { PrListItem, Thread } from "../../src/core/types.ts";
-import { availableActions, filterPrs, footer, noteFor, prefix, threadAt, wrap } from "../format.ts";
+import { actionLabel, availableActions, filterPrs, footer, noteFor, prefix, threadAt, wrap } from "../format.ts";
 
 function thread(over: Partial<Thread> = {}): Thread {
   return {
@@ -22,7 +22,7 @@ function thread(over: Partial<Thread> = {}): Thread {
   };
 }
 
-const keys = { send: "S", "make-changes": "i", queue: "p", reply: "R", dismiss: "x" } as const;
+const keys = { send: "S", "queue-changes": "i", queue: "p", reply: "R", dismiss: "x" } as const;
 const keyFor = (a: keyof typeof keys) => keys[a];
 
 test("prefix shows state, author, addressed sha and publish badge", () => {
@@ -32,11 +32,12 @@ test("prefix shows state, author, addressed sha and publish badge", () => {
   assert.equal(prefix(thread({ publish: "published" })), "[agent · draft] [published ✓]");
 });
 
-test("teammate mode hides make changes, local mode hides PR comment", () => {
+test("teammate mode hides queued changes, local mode hides PR comment", () => {
   assert.deepEqual(availableActions(thread(), "teammate"), ["send", "queue", "reply", "dismiss"]);
-  assert.deepEqual(availableActions(thread(), "local"), ["send", "make-changes", "reply", "dismiss"]);
+  assert.deepEqual(availableActions(thread(), "local"), ["send", "queue-changes", "reply", "dismiss"]);
   assert.deepEqual(availableActions(thread({ state: "dismissed" }), "own"), []);
-  assert.equal(footer(thread({ publish: "queued" }), "own", keyFor), "─ S send · i make changes · p remove PR comment · R reply · x dismiss");
+  assert.equal(footer(thread({ publish: "queued" }), "own", keyFor), "─ S send · i queue change · p remove PR comment · R reply · x dismiss");
+  assert.equal(actionLabel(thread({ state: "queued-changes" }), "queue-changes"), "remove queued change");
 });
 
 test("note keeps the whole comment in the rationale, wrapped to the diff column", () => {

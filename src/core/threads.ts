@@ -3,7 +3,16 @@ import { fail } from "./errors.ts";
 import { canMakeChanges } from "./syncstate.ts";
 import type { Anchor, Author, DeskEvent, EventKind, Message, Side, Store, Thread } from "./types.ts";
 
-export const ACTIONS = ["send", "make-changes", "queue", "unqueue", "dismiss", "reopen"] as const;
+export const ACTIONS = [
+  "send",
+  "queue-changes",
+  "unqueue-changes",
+  "make-changes",
+  "queue",
+  "unqueue",
+  "dismiss",
+  "reopen",
+] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export interface NewThread {
@@ -97,10 +106,20 @@ export function applyAction(store: Store, id: string, action: Action, body?: str
       break;
     case "make-changes":
       requireChangesAllowed(store, "make-changes");
-      requireState(thread, action, ["draft", "sent", "addressed", "stale"]);
+      requireState(thread, action, ["draft", "sent", "queued-changes", "addressed", "stale"]);
       if (extra) pushMessage(thread, "you", extra);
       thread.state = "making-changes";
       pushEvent(store, thread.id, "make-changes", extra);
+      break;
+    case "queue-changes":
+      requireChangesAllowed(store, "queue-changes");
+      requireState(thread, action, ["draft", "sent", "addressed", "stale"]);
+      if (extra) pushMessage(thread, "you", extra);
+      thread.state = "queued-changes";
+      break;
+    case "unqueue-changes":
+      requireState(thread, action, ["queued-changes"]);
+      thread.state = "draft";
       break;
     case "queue":
       if (store.mode === "local") fail("Local reviews cannot be published: there is no PR to queue comments for");
@@ -127,5 +146,17 @@ export function applyAction(store: Store, id: string, action: Action, body?: str
 }
 
 export function isOpenThread(thread: Thread): boolean {
-  return ["draft", "sent", "making-changes", "stale"].includes(thread.state);
+  return ["draft", "sent", "queued-changes", "making-changes", "stale"].includes(thread.state);
+}
+
+export function dispatchQueuedChanges(store: Store): Thread[] {
+  requireChangesAllowed(store, "send queued changes");
+  const queued = store.threads.filter((thread) => thread.state === "queued-changes");
+  if (queued.length === 0) fail("No changes are queued");
+  for (const thread of queued) {
+    thread.state = "making-changes";
+    thread.updatedAt = now();
+    pushEvent(store, thread.id, "make-changes");
+  }
+  return queued;
 }

@@ -1,7 +1,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import { makeAnchor, reanchor } from "./anchor.ts";
 import type { Args } from "./args.ts";
-import { doneThread } from "./done.ts";
+import { doneThread, doneThreads } from "./done.ts";
 import { fail } from "./errors.ts";
 import { openPrForBranch } from "./gh.ts";
 import { currentBranch, repoRoot } from "./git.ts";
@@ -13,7 +13,7 @@ import { pushReview } from "./push.ts";
 import { locateReview } from "./review.ts";
 import { updateStore } from "./store.ts";
 import { syncReview } from "./sync.ts";
-import { ACTIONS, addReply, addThread, applyAction, findThread } from "./threads.ts";
+import { ACTIONS, addReply, addThread, applyAction, dispatchQueuedChanges, findThread } from "./threads.ts";
 import type { Action } from "./threads.ts";
 import type { DeskEvent, PreparedReview, Thread } from "./types.ts";
 import { waitForEvents } from "./wait.ts";
@@ -147,6 +147,16 @@ export const commands: Record<string, Handler> = {
     return { data: thread, text: threadLine(thread) };
   },
 
+  async changes(a) {
+    if (a.positionals[1] !== "send") fail("Usage: desk changes send");
+    const { storePath } = await locate(a);
+    const threads = updateStore(storePath, (s) => structuredClone(dispatchQueuedChanges(s)));
+    return {
+      data: { threads },
+      text: `Sent ${threads.length} queued change${threads.length === 1 ? "" : "s"} to the agent`,
+    };
+  },
+
   async wait(a) {
     const { storePath } = await locate(a);
     const timeoutMs = (a.num("timeout") ?? 0) * 1000;
@@ -159,10 +169,18 @@ export const commands: Record<string, Handler> = {
   },
 
   async done(a) {
-    const id = a.positionals[1] ?? fail("Usage: desk done <id> [--message M] [--path P ...]");
+    const ids = a.positionals.slice(1);
+    if (ids.length === 0) fail("Usage: desk done <id...> [--message M] [--path P ...]");
     const { storePath } = await locate(a);
-    const result = doneThread(storePath, id, { message: a.str("message"), paths: a.all("path") });
-    return { data: result, text: `${result.thread.id} addressed in ${result.commit.slice(0, 7)}` };
+    if (ids.length === 1) {
+      const result = doneThread(storePath, ids[0]!, { message: a.str("message"), paths: a.all("path") });
+      return { data: result, text: `${result.thread.id} addressed in ${result.commit.slice(0, 7)}` };
+    }
+    const result = doneThreads(storePath, ids, { message: a.str("message"), paths: a.all("path") });
+    return {
+      data: result,
+      text: `${result.threads.map((thread) => thread.id).join(", ")} addressed in ${result.commit.slice(0, 7)}`,
+    };
   },
 
   async reanchor(a) {

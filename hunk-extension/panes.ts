@@ -7,7 +7,7 @@ import { filteredPrs, mode, useDeskState, visibleThreads, type DeskState } from 
 
 export const MODE_KEYS: Record<ThreadAction, string> = {
   send: "s",
-  "make-changes": "m",
+  "queue-changes": "m",
   queue: "p",
   reply: "r",
   dismiss: "x",
@@ -52,6 +52,8 @@ function stateColor(thread: Thread, theme: ExtensionPaneTheme): string {
     case "making-changes":
     case "sent":
       return theme.accent;
+    case "queued-changes":
+      return theme.accentMuted;
     default:
       return theme.text;
   }
@@ -147,8 +149,8 @@ export function ThreadsPane(props: ExtensionPaneProps): ReactNode {
   }
 
   const help = s.threadsMode
-    ? " j/k move · s m p r x act · P publish · o open · g PRs · esc back"
-    : " T focus threads · L PRs · P publish";
+    ? " j/k move · m queue · M send all · s p r x act · P publish · esc back"
+    : " T threads · M send queued changes · L PRs · P publish";
   rows.push(line("help", clip(help, width), theme.muted, theme.panel));
   return frame(theme, scrollRef, rows);
 }

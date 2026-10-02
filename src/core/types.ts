@@ -5,6 +5,7 @@ export type Author = "you" | "agent";
 export type ThreadState =
   | "draft"
   | "sent"
+  | "queued-changes"
   | "making-changes"
   | "addressed"
   | "stale"

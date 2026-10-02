@@ -27,10 +27,18 @@ export function reloadHunk(worktree: string, baseOid: string): void {
 }
 
 export function doneThread(storePath: string, id: string, opts: DoneOptions): { thread: Thread; commit: string } {
+  const result = doneThreads(storePath, [id], opts);
+  return { thread: result.threads[0]!, commit: result.commit };
+}
+
+export function doneThreads(storePath: string, ids: string[], opts: DoneOptions): { threads: Thread[]; commit: string } {
+  if (ids.length === 0) fail("No threads supplied to done");
   const store = readStore(storePath) ?? fail(`No review at ${storePath}`);
   requireChangesAllowed(store, "done");
-  const thread = findThread(store, id);
-  if (thread.state === "dismissed") fail(`Thread ${thread.id} is dismissed`);
+  const threads = ids.map((id) => findThread(store, id));
+  for (const thread of threads) {
+    if (thread.state === "dismissed") fail(`Thread ${thread.id} is dismissed`);
+  }
 
   const cwd = store.worktree;
   const scope = opts.paths.length > 0 ? ["--", ...opts.paths] : [];
@@ -38,18 +46,21 @@ export function doneThread(storePath: string, id: string, opts: DoneOptions): { 
   if (runGit(cwd, ["diff", "--cached", "--quiet", ...scope]).status === 0) {
     fail("Nothing to commit: the working tree has no changes" + (opts.paths.length ? " in the given paths" : ""));
   }
-  const subject = opts.message?.trim() || commitSubject(thread);
-  git(cwd, ["commit", "-m", subject, "-m", `${TRAILER}: ${store.key}/${thread.id}`, ...scope]);
+  const subject = opts.message?.trim() || (threads.length === 1 ? commitSubject(threads[0]!) : "Address review feedback");
+  const trailers = threads.flatMap((thread) => ["-m", `${TRAILER}: ${store.key}/${thread.id}`]);
+  git(cwd, ["commit", "-m", subject, ...trailers, ...scope]);
   const commit = headOid(cwd);
 
   const updated = updateStore(storePath, (s) => {
-    const t = findThread(s, id);
-    t.commits.push(commit);
-    t.state = "addressed";
-    t.updatedAt = new Date().toISOString();
+    const done = ids.map((id) => findThread(s, id));
+    for (const thread of done) {
+      thread.commits.push(commit);
+      thread.state = "addressed";
+      thread.updatedAt = new Date().toISOString();
+    }
     reanchor(s);
-    return t;
+    return done;
   });
   reloadHunk(store.worktree, store.baseOid);
-  return { thread: updated, commit };
+  return { threads: updated, commit };
 }

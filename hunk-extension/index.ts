@@ -32,7 +32,8 @@ const EXT_ID = basename(dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_KEYS = {
   comment: "C",
   send: "S",
-  "make-changes": "i",
+  "queue-changes": "i",
+  "dispatch-changes": "M",
   queue: "p",
   reply: "A",
   dismiss: "x",
@@ -169,7 +170,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
   }
 
   async function runAction(thread: Thread, action: ThreadAction, notify: Notify): Promise<void> {
-    if (action === "make-changes" && mode() === "teammate") {
+    if (action === "queue-changes" && mode() === "teammate") {
       notify("Make changes is not available on a teammate's PR", "warning");
       return;
     }
@@ -182,16 +183,32 @@ export default function desk(hunk: HunkExtensionAPI): void {
       if (await act(thread, next, notify)) notify(next === "queue" ? `#${thread.id} queued for the PR ↑` : `#${thread.id} unqueued`);
       return;
     }
+    if (action === "queue-changes") {
+      const next = thread.state === "queued-changes" ? "unqueue-changes" : "queue-changes";
+      if (await act(thread, next, notify)) {
+        notify(next === "queue-changes" ? `#${thread.id} queued for changes` : `#${thread.id} removed from the change queue`);
+      }
+      return;
+    }
     if (await act(thread, action, notify)) {
-      const done: Record<string, string> = { send: "sent to agent", "make-changes": "agent asked to make changes", dismiss: "dismissed" };
+      const done: Record<string, string> = { send: "sent to agent", dismiss: "dismissed" };
       notify(`#${thread.id} ${done[action] ?? action}`);
+    }
+  }
+
+  async function dispatchChanges(notify: Notify): Promise<void> {
+    try {
+      const out = await client.runOnReview<{ threads: Thread[] }>(["changes", "send"]);
+      notify(`Sent ${out.threads.length} queued change${out.threads.length === 1 ? "" : "s"} to the agent`);
+    } catch (e) {
+      notify(`desk changes send: ${errText(e)}`, "error");
     }
   }
 
   async function reply(thread: Thread, body: string, dialogs: ExtensionDialogs, notify: Notify): Promise<void> {
     const options = ["Reply"];
     if (thread.state === "draft" || thread.state === "stale") options.push("Reply and send to agent");
-    if (mode() !== "teammate") options.push("Reply and make changes");
+    if (mode() !== "teammate") options.push("Reply and queue change");
     if (thread.state === "sent" || thread.state === "addressed") options[0] = "Reply (agent is notified)";
     const choice = options.length > 1 ? await dialogs.select({ title: `Reply on #${thread.id}`, options }) : options[0];
     if (choice === null) {
@@ -205,7 +222,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
       return;
     }
     if (choice === "Reply and send to agent") await act(thread, "send", notify);
-    else if (choice === "Reply and make changes") await act(thread, "make-changes", notify, body);
+    else if (choice === "Reply and queue change") await act(thread, "queue-changes", notify);
     notify(`Replied on #${thread.id}`);
   }
 
@@ -462,7 +479,10 @@ export default function desk(hunk: HunkExtensionAPI): void {
         case "s":
           return thread("send");
         case "m":
-          return thread("make-changes");
+          return thread("queue-changes");
+        case "M":
+          void dispatchChanges(ctx.notify);
+          return "handled";
         case "p":
           return thread("queue");
         case "x":
@@ -547,11 +567,11 @@ export default function desk(hunk: HunkExtensionAPI): void {
 
   const commands: { id: string; title: string; run: ExtensionCommandHandler }[] = [
     { id: "comment", title: "desk: new comment on this line", run: (ctx) => newComment(ctx.selection, ctx.dialogs, ctx.notify) },
-    ...(["send", "make-changes", "queue", "dismiss"] as const).map((action) => ({
+    ...(["send", "queue-changes", "queue", "dismiss"] as const).map((action) => ({
       id: action,
       title: `desk: ${action === "queue" ? "add/remove PR comment" : action.replace("-", " ")}`,
       run: (ctx: ExtensionCommandContext) => {
-        if (action === "make-changes" && mode() === "teammate") {
+        if (action === "queue-changes" && mode() === "teammate") {
           ctx.notify("Make changes is not available on a teammate's PR", "warning");
           return;
         }
@@ -559,6 +579,7 @@ export default function desk(hunk: HunkExtensionAPI): void {
         if (t) return runAction(t, action, ctx.notify);
       },
     })),
+    { id: "dispatch-changes", title: "desk: send all queued changes to agent", run: (ctx) => dispatchChanges(ctx.notify) },
     {
       id: "reply",
       title: "desk: reply to thread",

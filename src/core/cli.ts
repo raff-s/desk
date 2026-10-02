@@ -10,9 +10,10 @@ const USAGE = `desk - terminal review desk
   desk prs | threads | store-path | reanchor | sync
   desk comment add --file F --line L [--end-line E] [--side new|old] --body B [--author you|agent]
   desk reply <id> --body B [--author you|agent]
-  desk action <id> send|make-changes|queue|unqueue|dismiss|reopen [--body B]
+  desk action <id> send|queue-changes|unqueue-changes|make-changes|queue|unqueue|dismiss|reopen [--body B]
+  desk changes send
   desk wait [--timeout seconds]
-  desk done <id> [--message M] [--path P ...]
+  desk done <id...> [--message M] [--path P ...]
   desk publish [--event COMMENT|APPROVE|REQUEST_CHANGES] [--body B] [--yes] [--force]
   desk push [--squash|--keep] [--yes]
 

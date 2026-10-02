@@ -54,7 +54,8 @@ Hunk already uses several of the letters desk would like, so these are the keys 
 | `L` | `g` | Pull request list. `Esc` closes it. `Enter` opens the selected PR. |
 | `c` or `C` | | Comment on the current line. Save with `Ctrl-S`. |
 | `S` | `s` | Send the comment to the agent. |
-| `i` | `m` | Make changes. The agent edits this thread. Hidden on someone else's PR. |
+| `i` | `m` | Queue or unqueue this thread for changes. The agent is not woken yet. Hidden on someone else's PR. |
+| `M` | `M` | Send all queued changes to the agent as one batch. |
 | `p` | `p` | Queue this comment for GitHub, or take it back out of the queue. |
 | `R` or `A` | `r` | Reply. You can reply, send, or make changes from the same reply. |
 | `x` | `x` | Dismiss. |
@@ -68,7 +69,7 @@ Quit Hunk with `q`. Open it again with `desk open <number>`. Comments, queued pu
 A comment stays on your machine until you publish it.
 
 - **Send** (`S`) asks the agent to read it and reply. The reply stays local.
-- **Make changes** (`i`) asks the agent to edit the code for that comment. On your own PR it commits in your worktree and the note becomes **addressed**. On someone else's PR this action is not offered. You leave a comment, and they decide whether to try the idea.
+- **Queue change** (`i`) marks as many threads as you want without waking the agent. **Send queued changes** (`M`) delivers the whole batch. The agent reads every request, applies all compatible edits, runs the relevant tests once, and makes one review-feedback commit linked to every addressed thread. On someone else's PR these actions are not offered.
 - **Add PR comment** (`p`) only marks it. **Publish** (`P`) is what sends the marked comments, as one review: Comment, Approve, or Request changes.
 
 `desk push` offers to squash the small per-thread commits that have not been pushed yet. It never force-pushes, and it refuses to push a review of someone else's PR.

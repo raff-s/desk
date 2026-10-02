@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addReply, addThread, applyAction, findThread } from "../src/core/threads.ts";
+import { addReply, addThread, applyAction, dispatchQueuedChanges, findThread } from "../src/core/threads.ts";
 import { emptyStore } from "../src/core/store.ts";
 import type { Author, ReviewMode, Store } from "../src/core/types.ts";
 
@@ -50,6 +50,29 @@ test("send, make-changes and replies emit events in order", () => {
   assert.throws(() => applyAction(store, t.id, "make-changes"), /while it is making-changes/);
 });
 
+test("changes can be queued without waking the agent, then dispatched together", () => {
+  const store = newStore();
+  const one = comment(store, "agent", "first fix");
+  const two = comment(store, "agent", "second fix");
+
+  applyAction(store, one.id, "queue-changes");
+  applyAction(store, two.id, "queue-changes");
+  assert.equal(one.state, "queued-changes");
+  assert.equal(store.events.length, 0);
+
+  applyAction(store, two.id, "unqueue-changes");
+  assert.equal(two.state, "draft");
+  applyAction(store, two.id, "queue-changes");
+
+  assert.deepEqual(dispatchQueuedChanges(store).map((thread) => thread.id), ["t1", "t2"]);
+  assert.ok(store.threads.every((thread) => thread.state === "making-changes"));
+  assert.deepEqual(store.events.map((event) => [event.threadId, event.kind]), [
+    ["t1", "make-changes"],
+    ["t2", "make-changes"],
+  ]);
+  assert.throws(() => dispatchQueuedChanges(store), /No changes are queued/);
+});
+
 test("an agent reply moves draft to sent; a human reply on a draft emits nothing", () => {
   const store = newStore();
   const mine = comment(store, "you");
@@ -96,6 +119,7 @@ test("teammate PRs are comments-only: make-changes refused, send and queue allow
     number: 7, title: "t", url: "u", author: "alice", baseRef: "main", headRef: "f", headOid: "o", isCrossRepository: false,
   };
   const t = comment(store);
+  assert.throws(() => applyAction(store, t.id, "queue-changes"), /comments-only.*alice/);
   assert.throws(() => applyAction(store, t.id, "make-changes"), /comments-only.*alice/);
   assert.equal(t.state, "draft");
   assert.equal(store.events.length, 0);

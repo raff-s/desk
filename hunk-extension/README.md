@@ -20,7 +20,8 @@ and the contract letters work inside the threads pane (`T`).
 | --- | --- | --- | --- |
 | `c` comment | `c` (Hunk note editor), `C` (dialog) | — | A saved Hunk note becomes a desk draft thread |
 | `s` send | `S` | `s` | |
-| `m` make changes | `i` | `m` | Hidden and refused in teammate mode |
+| queue change | `i` | `m` | Queue/unqueue this thread without waking the agent; hidden in teammate mode |
+| send queued changes | `M` | `M` | Deliver every queued change to the agent as one batch |
 | `p` PR comment toggle | `p` | `p` | Hidden in local mode |
 | `r` reply | `R` (Hunk reply on the note), `A` (dialog) | `r` | Asks: reply / reply + send / reply + make changes |
 | `x` dismiss | `x` | `x` | |
@@ -39,7 +40,7 @@ and jump-to-top defaults), add this to `~/.config/hunk/config.toml`:
 ```toml
 [keybindings]
 "hunk-extension.send" = "s"
-"hunk-extension.make-changes" = "m"
+"hunk-extension.queue-changes" = "m"
 "hunk-extension.reply" = "r"
 "hunk-extension.threads" = "t"
 "hunk-extension.prs" = "g"

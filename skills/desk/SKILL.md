@@ -37,6 +37,7 @@ After you change code locally: `desk prepare . --json`, then the same comment â†
 Run `desk wait --json` in the **foreground** with a long timeout (for example `--timeout 3600`). When it returns empty events, run it again. Keep looping until the user says the review is finished.
 
 Each successful wait returns `{ events, threads }`. Handle every event, including ones already queued before this session started.
+When it returns several `make-changes` events, treat them as one batch: inspect all requests first, apply all compatible edits, run the relevant test suite once, then finish them together.
 
 ## Continue a review
 
@@ -62,11 +63,13 @@ The human replied on an already-sent thread. Answer with `desk reply <id> --auth
 
 ## Event: `make-changes`
 
-Implement only what the thread and optional event `body` ask for, in the **review worktree** (`PreparedReview.worktree`).
+The human queued one or more changes and pressed `M`. Implement only what those threads and optional event bodies ask for, in the **review worktree** (`PreparedReview.worktree`).
 
-1. Edit files; run relevant tests from that worktree.
-2. `desk done <id> --json` (optionally `--path` for partial commits).
-3. `desk reply <id> --author agent --body "<brief summary of what changed>"`.
+1. Read every `make-changes` event returned by this wait before editing.
+2. Apply all compatible edits. If two requests conflict, reply on both and stop before guessing.
+3. Run relevant tests once after the batch is complete.
+4. `desk done <id1> <id2> ... --json` (optionally `--path` for a partial commit). This creates one review-feedback commit and links it to every included thread.
+5. Reply briefly on each thread with what changed.
 
 If `canMakeChanges` is false (teammate mode), do **not** edit code. Reply explaining teammate mode and include a suggested patch or snippet in the reply body.
 
@@ -85,8 +88,8 @@ If `canMakeChanges` is false (teammate mode), do **not** edit code. Reply explai
 
 ## Keys the human actually presses
 
-From the diff: `T` threads (`j`/`k` move, Enter back), `L` PR list (`Esc` closes it), `c` comment, `S` send, `i` make changes, `p` queue, `R` reply, `x` dismiss, `P` publish, `o`/`O` open in Cursor, `q` quit Hunk.
+From the diff: `T` threads (`j`/`k` move, Enter back), `L` PR list (`Esc` closes it), `c` comment, `S` send, `i` queue/unqueue this change, `M` send all queued changes to you, `p` queue a PR comment, `R` reply, `x` dismiss, `P` publish, `o`/`O` open in Cursor, `q` quit Hunk.
 
-Inside the threads pane the shorter letters work: `s` send, `m` make changes, `r` reply, `g` PR list.
+Inside the threads pane: `m` queue/unqueue this change, `M` send all queued changes, `s` send a question, `r` reply, `g` PR list.
 
 When you tell the human how to do something, use these keys, not `s`/`m`/`t`/`g` from the diff. Publishing and pushing stay human actions unless they ask in chat.

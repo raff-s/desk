@@ -1,6 +1,6 @@
 import type { PrListItem, ReviewMode, Side, Thread } from "../src/core/types.ts";
 
-export type ThreadAction = "send" | "make-changes" | "queue" | "reply" | "dismiss";
+export type ThreadAction = "send" | "queue-changes" | "queue" | "reply" | "dismiss";
 
 export type KeyLookup = (action: ThreadAction) => string;
 
@@ -15,7 +15,7 @@ export interface NoteSpec {
 
 export const ACTION_LABELS: Record<ThreadAction, string> = {
   send: "send",
-  "make-changes": "make changes",
+  "queue-changes": "queue change",
   queue: "add PR comment",
   reply: "reply",
   dismiss: "dismiss",
@@ -33,6 +33,8 @@ export function stateTag(thread: Thread): string {
     }
     case "making-changes":
       return "[making changes…]";
+    case "queued-changes":
+      return "[change queued]";
     default:
       return `[${thread.author} · ${thread.state}]`;
   }
@@ -56,7 +58,7 @@ export function availableActions(thread: Thread, mode: ReviewMode): ThreadAction
   if (thread.state === "dismissed") return [];
   const actions: ThreadAction[] = [];
   if (thread.state === "draft" || thread.state === "stale") actions.push("send");
-  if (mode !== "teammate" && thread.state !== "making-changes") actions.push("make-changes");
+  if (mode !== "teammate" && thread.state !== "making-changes") actions.push("queue-changes");
   if (mode !== "local" && thread.publish !== "published") actions.push("queue");
   actions.push("reply", "dismiss");
   return actions;
@@ -64,6 +66,7 @@ export function availableActions(thread: Thread, mode: ReviewMode): ThreadAction
 
 export function actionLabel(thread: Thread, action: ThreadAction): string {
   if (action === "queue" && thread.publish === "queued") return "remove PR comment";
+  if (action === "queue-changes" && thread.state === "queued-changes") return "remove queued change";
   return ACTION_LABELS[action];
 }
 
